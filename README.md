@@ -86,7 +86,11 @@ manual click after every stop.
 | Server / Printer | Bambuddy URL and printer, printer auto-selects |
 | Name | prefills as `YYMMDD-HHMM-project-pN` per new slice; edit it; your edits survive refresh |
 | Add | stages the newest slice, uploads, queues |
-| Queue list | pending jobs first; drag the grip to reorder; copy and delete buttons; the printing row shows a badge, percent, live ETA, copy, and STOP |
+| Queue list | drag the grip to reorder pending jobs; copy and delete buttons; the printing row shows a badge, percent, live ETA, copy, and STOP |
+
+The `»` button collapses the panel to a narrow strip; press `«` to expand it
+and drag the dock edge wide again. Orca's own X closes the panel for good, but
+the next slice brings it back automatically.
 
 Settings persist in `<Orca data dir>/bambuddy_queue/config.json`.
 

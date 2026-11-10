@@ -6,7 +6,7 @@
 # name = "BambuQueue"
 # description = "Queue sliced plates to a Bambuddy print server: wraps each plate into a .gcode.3mf, uploads it, queues it with plate-swap G-code injection, and shows the live queue with ETA, auto-eject on stop, and reorder / duplicate / delete."
 # author = "cmalcantara"
-# version = "0.3.8"
+# version = "0.3.9"
 # ///
 """BambuQueue for OrcaSlicer -> Bambuddy.
 
@@ -387,8 +387,12 @@ def auto_stage(force=False):
 # ------------------------------------------------------------------ panel page
 PAGE = r"""<!doctype html><html><head><meta charset=utf8>
 <style>
- html{min-width:320px}
  body{font-family:var(--orca-font);color:var(--orca-fg);margin:8px;font-size:13px;min-width:320px}
+ #sliver{display:none;flex-direction:column;align-items:center;gap:8px;padding:6px 0}
+ #sstat{writing-mode:vertical-rl;letter-spacing:.08em;font-size:11px;max-height:180px;overflow:hidden;white-space:nowrap}
+ body.min{margin:4px;min-width:0}
+ body.min #main{display:none}
+ body.min #sliver{display:flex}
  h2{font-size:14px;margin:0 0 6px}
  .row{display:flex;gap:4px;align-items:center;margin:4px 0}
  label{color:var(--orca-muted);min-width:44px}
@@ -413,8 +417,9 @@ PAGE = r"""<!doctype html><html><head><meta charset=utf8>
  .muted{color:var(--orca-muted)}
  .inj{font-size:11px;color:#5bbf6a}
 </style></head><body>
+<div id=main>
 <div class=row><label>Server</label><input id=url style="flex:1">
-  <label style="min-width:0">Printer</label><select id=printer style="max-width:120px"></select></div>
+  <label style="min-width:0">Printer</label><select id=printer style="max-width:120px"></select><button id=hide class=ghost title="collapse to strip">»</button></div>
 <div class=row><input id=name style="flex:1" placeholder="job name — set when you slice"></div>
 <button id=add style="width:100%">＋ Add current plate to Bambuddy queue</button>
 <div class=sect>Queue</div>
@@ -422,6 +427,8 @@ PAGE = r"""<!doctype html><html><head><meta charset=utf8>
 <div class=row><button id=refresh class=ghost>Refresh</button>
   <span id=sum class=muted style="font-size:13px"></span></div>
 <div id=status></div>
+</div>
+<div id=sliver><button id=expand class=ghost title="expand">«</button><span id=sstat class=muted></span></div>
 <script>
 const $=id=>document.getElementById(id);
 let S={url:"",printer_id:null,printers:[],items:[],staged:false,ok:false,name:""};
@@ -482,6 +489,8 @@ function render(){
     q.appendChild(d);
   });
   $("sum").textContent=items.length?items.length+" items ("+pend+" pending)":"queue empty";
+  const pr=items.find(x=>x.status==="printing");
+  $("sstat").textContent=pr?"\u25b6 "+(pr.library_file_name||"").slice(0,24):(items.length||0)+" queued";
   if(!items.length)q.innerHTML='<div class=muted>Nothing queued.</div>';
 }
 $("add").onclick=()=>orca.postMessage({type:"add",name:$("name").value.trim()});
@@ -521,6 +530,8 @@ $("add").onclick=()=>orca.postMessage({type:"add",name:$("name").value.trim()});
   }
 })();
 $("refresh").onclick=()=>orca.postMessage({type:"refresh"});
+$("hide").onclick=()=>document.body.classList.add("min");
+$("expand").onclick=()=>document.body.classList.remove("min");
 $("url").onchange=e=>orca.postMessage({type:"url",url:e.target.value.trim()});
 $("printer").onchange=e=>orca.postMessage({type:"printer",printer_id:parseInt(e.target.value,10)});
 orca.onMessage(m=>{
@@ -537,12 +548,19 @@ setInterval(()=>orca.postMessage({type:"refresh"}),6000);
 """
 
 # ------------------------------------------------------------------ capabilities
+PANEL = None   # live Panel capability instance; CapturePlate uses it to restore the dock
+
 class CapturePlate(orca.slicing.SlicingPipelineCapabilityBase):
     def get_name(self):
         return "BambuQueue Capture"
     def execute(self, ctx):
         if ctx.step != orca.slicing.Step.psGCodePostProcess:
             return orca.ExecutionResult.success()
+        try:
+            if PANEL is not None:
+                PANEL._ensure_panel()   # auto-restore dock after X-close (option D)
+        except Exception:
+            pass
         try:
             os.makedirs(STORE_ROOT, exist_ok=True)
             shutil.copyfile(ctx.gcode_path, STAGING)
@@ -580,13 +598,39 @@ class Panel(orca.script.ScriptPluginCapabilityBase):
     def get_name(self):
         return "BambuQueue"
     def on_load(self):
+        global PANEL
+        PANEL = self
         self.cfg = load_config()
+        self._open_panel()
+        self._push()
+    def on_close(self):
+        self.panel = None
+    def _open_panel(self):
         self.panel = orca.host.ui.create_dock_panel(
             html=PAGE, title="BambuQueue", width=360, height=600,
             on_message=self.on_message, on_close=self.on_close, dock="right")
-        self._push()
-    def on_close(self):
-        pass
+    def _is_open(self):
+        p = getattr(self, "panel", None)
+        if p is None:
+            return False
+        try:
+            v = getattr(p, "is_open", True)
+            if callable(v):
+                v = v()
+            return bool(v)
+        except Exception:
+            return False
+    def _ensure_panel(self):
+        """Re-create the dock if it was closed. Returns True if reopened."""
+        if self._is_open():
+            return False
+        try:
+            self._open_panel()
+            self._push()
+            return True
+        except Exception:
+            self.panel = None
+            return False
 
     # ---- state push
     def _collect(self):
@@ -636,23 +680,29 @@ class Panel(orca.script.ScriptPluginCapabilityBase):
         if errs:
             st["_err"] = "; ".join(errs)
         return st
+    def _post(self, obj):
+        if not self._is_open():
+            return
+        try:
+            self.panel.post(obj)
+        except Exception:
+            pass
     def _push(self, err=None):
-        if getattr(self, "panel", None) is None:
+        if not self._is_open():
             return
         st = self._collect()
-        self.panel.post(st)
+        self._post(st)
         if err:
-            self.panel.post({"type": "status", "message": "✗ " + err})
+            self._post({"type": "status", "message": "✗ " + err})
         elif st.get("_err"):
-            self.panel.post({"type": "status", "message": "✗ " + st["_err"]})
+            self._post({"type": "status", "message": "✗ " + st["_err"]})
     def _async(self, fn):
         def run():
             try:
                 msg = fn()
             except Exception as e:
                 msg = str(e)
-            if getattr(self, "panel", None):
-                self.panel.post({"type": "status", "message": ("✓ " if not msg.startswith(("✗", "!")) else "") + msg})
+            self._post({"type": "status", "message": ("✓ " if not msg.startswith(("✗", "!")) else "") + msg})
             self._push()
         threading.Thread(target=run, daemon=True).start()
 
@@ -671,7 +721,7 @@ class Panel(orca.script.ScriptPluginCapabilityBase):
             if t == "refresh":
                 self._push(); return
         except Exception as e:
-            self.panel.post({"type": "status", "message": "✗ " + str(e)}); return
+            self._post({"type": "status", "message": "✗ " + str(e)}); return
 
         if t == "add":
             self._async(lambda: self._add(msg.get("name")))
