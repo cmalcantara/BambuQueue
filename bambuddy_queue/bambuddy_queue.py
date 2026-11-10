@@ -6,7 +6,7 @@
 # name = "BambuQueue"
 # description = "Queue sliced plates to a Bambuddy print server: wraps each plate into a .gcode.3mf, uploads it, queues it with plate-swap G-code injection, and shows the live queue with ETA, auto-eject on stop, and reorder / duplicate / delete."
 # author = "cmalcantara"
-# version = "0.3.6"
+# version = "0.3.7"
 # ///
 """BambuQueue for OrcaSlicer -> Bambuddy.
 
@@ -387,18 +387,21 @@ def auto_stage(force=False):
 # ------------------------------------------------------------------ panel page
 PAGE = r"""<!doctype html><html><head><meta charset=utf8>
 <style>
- body{font-family:var(--orca-font);color:var(--orca-fg);margin:10px;font-size:13px}
- h2{font-size:15px;margin:0 0 8px}
- .row{display:flex;gap:6px;align-items:center;margin:6px 0}
- label{color:var(--orca-muted);min-width:52px}
- button{background:var(--orca-accent);color:var(--orca-accent-fg);border:0;border-radius:6px;padding:7px 12px;cursor:pointer;font:inherit}
- button.ghost{background:transparent;color:var(--orca-fg);border:1px solid var(--orca-border);padding:4px 8px}
+ body{font-family:var(--orca-font);color:var(--orca-fg);margin:8px;font-size:12px}
+ h2{font-size:14px;margin:0 0 6px}
+ .row{display:flex;gap:4px;align-items:center;margin:4px 0}
+ label{color:var(--orca-muted);min-width:44px}
+ button{background:var(--orca-accent);color:var(--orca-accent-fg);border:0;border-radius:4px;padding:6px 10px;cursor:pointer;font:inherit}
+ button.ghost{background:transparent;color:var(--orca-fg);border:1px solid var(--orca-border);border-radius:4px;padding:2px 8px;line-height:1.5}
+ button.ghost:hover:not(:disabled){background:rgba(128,128,128,.14)}
  button:disabled{opacity:.45;cursor:default}
- input,select{background:var(--orca-bg);color:var(--orca-fg);border:1px solid var(--orca-border);border-radius:6px;padding:5px 7px;font:inherit}
- .item{border:1px solid var(--orca-border);border-radius:8px;padding:6px 8px;margin:6px 0}
-.item[data-pid]{cursor:grab}
-.item.dragging{opacity:.4;cursor:grabbing}
-.grip{color:var(--orca-muted);margin-right:4px}
+ input,select{background:var(--orca-bg);color:var(--orca-fg);border:1px solid var(--orca-border);border-radius:4px;padding:4px 6px;font:inherit}
+ .sect{color:var(--orca-muted);font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;margin:10px 0 2px}
+ .item{border:0;border-bottom:1px solid var(--orca-border);padding:5px 4px;margin:0}
+ .item:last-child{border-bottom:0}
+ .item[data-pid]{cursor:grab}
+ .item.dragging{opacity:.4;cursor:grabbing}
+ .grip{color:var(--orca-muted);margin-right:4px}
  .item .top{display:flex;gap:6px;align-items:center}
  .item .nm{flex:1;white-space:normal;word-break:break-word;line-height:1.35}
  .st{font-size:11px;padding:1px 6px;border-radius:8px;border:1px solid var(--orca-border);color:var(--orca-muted)}
@@ -413,7 +416,8 @@ PAGE = r"""<!doctype html><html><head><meta charset=utf8>
   <label style="min-width:0">Printer</label><select id=printer style="max-width:120px"></select></div>
 <div class=row><input id=name style="flex:1" placeholder="job name — set when you slice"></div>
 <button id=add style="width:100%">＋ Add current plate to Bambuddy queue</button>
-<div id=queue style="margin-top:8px"></div>
+<div class=sect>Queue</div>
+<div id=queue style="margin-top:2px"></div>
 <div class=row><button id=refresh class=ghost>Refresh</button>
   <span id=sum class=muted style="font-size:12px"></span></div>
 <div id=status></div>
@@ -441,10 +445,10 @@ function render(){
     const idx=document.createElement("span");idx.className="muted";idx.textContent=(i+1)+".";
     const nm=document.createElement("span");nm.className="nm";nm.textContent=it.library_file_name||("#"+it.id);
     top.append(idx,nm);    const meta=document.createElement("div");meta.className="muted";
-    meta.style.cssText="font-size:11px;margin:2px 0 4px 14px";
+    meta.style.cssText="font-size:11px;margin:1px 0 4px 16px";
     if(it.status==="printing"){
       const badge=document.createElement("span");badge.textContent="PRINTING";
-      badge.style.cssText="font-size:10px;font-weight:700;color:#2f9e44;background:rgba(47,158,68,.15);border-radius:8px;padding:1px 7px;margin-left:8px";
+      badge.style.cssText="font-size:10px;font-weight:700;color:#e8a33d;background:rgba(232,163,61,.14);border-radius:8px;padding:1px 7px;margin-left:8px";
       top.append(badge);
       const bits=[];
       if(S.active&&S.active.progress!=null)bits.push(S.active.progress+"%");
