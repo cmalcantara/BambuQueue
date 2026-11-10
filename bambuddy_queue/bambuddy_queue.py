@@ -6,7 +6,7 @@
 # name = "BambuQueue"
 # description = "Queue sliced plates to a Bambuddy print server: wraps each plate into a .gcode.3mf, uploads it, queues it with plate-swap G-code injection, and shows the live queue with ETA, auto-eject on stop, and reorder / duplicate / delete."
 # author = "cmalcantara"
-# version = "0.4.0"
+# version = "0.4.1"
 # ///
 """BambuQueue for OrcaSlicer -> Bambuddy.
 
@@ -418,7 +418,7 @@ PAGE = r"""<!doctype html><html><head><meta charset=utf8>
  .inj{font-size:11px;color:#5bbf6a}
 </style></head><body>
 <div id=main>
-<div class=row style="margin:0 0 4px;justify-content:flex-end"><button id=hide class=ghost title="collapse to strip" style="min-width:28px;padding:0 8px">»</button></div>
+<div class=row style="margin:0 0 4px;justify-content:flex-start"><button id=hide class=ghost title="collapse to strip" style="min-width:28px;padding:0 8px">»</button><span id=ver class=muted style="font-size:11px;margin-left:6px"></span></div>
 <div class=row><label>Server</label><input id=url style="flex:1">
   <label style="min-width:0">Printer</label><select id=printer style="max-width:120px"></select></div>
 <div class=row><input id=name style="flex:1" placeholder="job name — set when you slice"></div>
@@ -536,7 +536,8 @@ $("expand").onclick=()=>{document.body.classList.remove("min");orca.postMessage(
 $("url").onchange=e=>orca.postMessage({type:"url",url:e.target.value.trim()});
 $("printer").onchange=e=>orca.postMessage({type:"printer",printer_id:parseInt(e.target.value,10)});
 orca.onMessage(m=>{
-  if(m.type==="state"){m.__recv=Date.now();S=m;render();tickEta();}
+  if(m.type==="state"){
+    if(m.v)$("ver").textContent="v"+m.v;m.__recv=Date.now();S=m;render();tickEta();}
   else if(m.type==="status"){$("status").textContent=m.message;}
 });
 function tickEta(){document.querySelectorAll(".eta").forEach(e=>{
@@ -660,7 +661,7 @@ class Panel(orca.script.ScriptPluginCapabilityBase):
     # ---- state push
     def _collect(self):
         auto_stage()
-        st = {"type": "state", "url": self.cfg["url"], "printer_id": self.cfg["printer_id"],
+        st = {"type": "state", "v": "0.4.1", "url": self.cfg["url"], "printer_id": self.cfg["printer_id"],
               "printers": [], "items": [], "staged": os.path.exists(STAGING), "ok": False,
               "name": ""}
         try:
