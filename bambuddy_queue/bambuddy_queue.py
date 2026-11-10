@@ -6,7 +6,7 @@
 # name = "BambuQueue"
 # description = "Queue sliced plates to a Bambuddy print server: wraps each plate into a .gcode.3mf, uploads it, queues it with plate-swap G-code injection, and shows the live queue with ETA, auto-eject on stop, and reorder / duplicate / delete."
 # author = "cmalcantara"
-# version = "0.3.5"
+# version = "0.3.6"
 # ///
 """BambuQueue for OrcaSlicer -> Bambuddy.
 
@@ -396,8 +396,8 @@ PAGE = r"""<!doctype html><html><head><meta charset=utf8>
  button:disabled{opacity:.45;cursor:default}
  input,select{background:var(--orca-bg);color:var(--orca-fg);border:1px solid var(--orca-border);border-radius:6px;padding:5px 7px;font:inherit}
  .item{border:1px solid var(--orca-border);border-radius:8px;padding:6px 8px;margin:6px 0}
-.item[draggable]{cursor:grab}
-.item.dragging{opacity:.4}
+.item[data-pid]{cursor:grab}
+.item.dragging{opacity:.4;cursor:grabbing}
 .grip{color:var(--orca-muted);margin-right:4px}
  .item .top{display:flex;gap:6px;align-items:center}
  .item .nm{flex:1;white-space:normal;word-break:break-word;line-height:1.35}
@@ -434,19 +434,6 @@ function render(){
   $("add").disabled=!S.staged||!S.ok;
   const q=$("queue");q.innerHTML="";
   const items=S.items||[];let pend=0;
-  // pending first (they own the dispatch order), anchors (printing etc.) after
-  items.sort((a,b)=>((a.status==="pending")?0:1)-((b.status==="pending")?0:1));
-  if(!q._dnd){q._dnd=1;
-    q.ondragover=e=>{
-      const dr=q.querySelector(".dragging");if(!dr)return;e.preventDefault();
-      const cards=[...q.querySelectorAll(".item[draggable]")].filter(c=>c!==dr);
-      let target=null;
-      for(const c of cards){const r=c.getBoundingClientRect();if(e.clientY<r.top+r.height/2){target=c;break}}
-      if(target)q.insertBefore(dr,target);
-      else if(cards.length)q.insertBefore(dr,cards[cards.length-1].nextSibling);
-    };
-    q.ondrop=e=>e.preventDefault();
-  }
   items.forEach((it,i)=>{
     if(it.status==="pending")pend++;
     const d=document.createElement("div");d.className="item";
@@ -485,11 +472,7 @@ function render(){
     if(it.status==="pending"){
       const grip=document.createElement("span");grip.className="grip";grip.textContent="\u283f";
       top.prepend(grip);
-      d.draggable=true;d.dataset.pid=it.id;
-      d.ondragstart=e=>{d.classList.add("dragging");e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",String(it.id))};
-      d.ondragend=()=>{d.classList.remove("dragging");
-        const ids=[...q.querySelectorAll(".item[draggable]")].map(c=>+c.dataset.pid);
-        orca.postMessage({type:"reorder",ids:ids});};
+      d.dataset.pid=it.id;
     }
     q.appendChild(d);
   });
@@ -497,6 +480,41 @@ function render(){
   if(!items.length)q.innerHTML='<div class=muted>Nothing queued.</div>';
 }
 $("add").onclick=()=>orca.postMessage({type:"add",name:$("name").value.trim()});
+// pointer-based reorder: HTML5 dragstart never fires inside Orca's webview
+(function(){
+  let drag=null;
+  $("queue").addEventListener("pointerdown",e=>{
+    const card=e.target.closest?e.target.closest(".item[data-pid]"):null;
+    if(!card||e.target.closest("button"))return;
+    e.preventDefault();
+    drag={card:card,y:e.clientY,moved:false};
+    card.classList.add("dragging");
+    card.setPointerCapture&&card.setPointerCapture(e.pointerId);
+  });
+  $("queue").addEventListener("pointermove",e=>{
+    if(!drag)return;
+    if(Math.abs(e.clientY-drag.y)<4)return;
+    drag.moved=true;
+    const q=$("queue");
+    const cards=[...q.querySelectorAll(".item[data-pid]")].filter(c=>c!==drag.card);
+    let target=null;
+    for(const c of cards){const r=c.getBoundingClientRect();if(e.clientY<r.top+r.height/2){target=c;break;}}
+    if(target)q.insertBefore(drag.card,target);
+    else if(cards.length)q.insertBefore(drag.card,cards[cards.length-1].nextSibling);
+  });
+  $("queue").addEventListener("pointerup",endDrag);
+  document.addEventListener("pointerup",endDrag);
+  document.addEventListener("pointercancel",endDrag);
+  function endDrag(e){
+    if(!drag)return;
+    drag.card.classList.remove("dragging");
+    if(drag.moved){
+      const ids=[...$("queue").querySelectorAll(".item[data-pid]")].map(c=>+c.dataset.pid);
+      orca.postMessage({type:"reorder",ids:ids});
+    }
+    drag=null;
+  }
+})();
 $("refresh").onclick=()=>orca.postMessage({type:"refresh"});
 $("url").onchange=e=>orca.postMessage({type:"url",url:e.target.value.trim()});
 $("printer").onchange=e=>orca.postMessage({type:"printer",printer_id:parseInt(e.target.value,10)});
