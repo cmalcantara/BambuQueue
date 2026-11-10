@@ -6,7 +6,7 @@
 # name = "BambuQueue"
 # description = "Queue sliced plates to a Bambuddy print server: wraps each plate into a .gcode.3mf, uploads it, queues it with plate-swap G-code injection, and shows the live queue with ETA, auto-eject on stop, and reorder / duplicate / delete."
 # author = "cmalcantara"
-# version = "0.4.2"
+# version = "0.4.3"
 # ///
 """BambuQueue for OrcaSlicer -> Bambuddy.
 
@@ -413,7 +413,7 @@ PAGE = r"""<!doctype html><html><head><meta charset=utf8>
  .inj{font-size:11px;color:#5bbf6a}
 </style></head><body>
 <div id=main>
-<div class=row style="margin:0 0 4px"><span id=ver class=muted style="font-size:11px"></span></div>
+<div class=row style="margin:0 0 4px;justify-content:space-between"><span id=ver class=muted style="font-size:11px"></span><span class=muted style="font-size:11px">after X: reload the plugin to reopen</span></div>
 <div class=row><label>Server</label><input id=url style="flex:1">
   <label style="min-width:0">Printer</label><select id=printer style="max-width:120px"></select></div>
 <div class=row><input id=name style="flex:1" placeholder="job name — set when you slice"></div>
@@ -611,7 +611,7 @@ class Panel(orca.script.ScriptPluginCapabilityBase):
     # ---- state push
     def _collect(self):
         auto_stage()
-        st = {"type": "state", "v": "0.4.2", "url": self.cfg["url"], "printer_id": self.cfg["printer_id"],
+        st = {"type": "state", "v": "0.4.3", "url": self.cfg["url"], "printer_id": self.cfg["printer_id"],
               "printers": [], "items": [], "staged": os.path.exists(STAGING), "ok": False,
               "name": ""}
         try:
