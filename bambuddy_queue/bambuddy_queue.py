@@ -6,7 +6,7 @@
 # name = "BambuQueue"
 # description = "Queue sliced plates to a Bambuddy print server: wraps each plate into a .gcode.3mf, uploads it, queues it with plate-swap G-code injection, and shows the live queue with ETA, auto-eject on stop, and reorder / duplicate / delete."
 # author = "cmalcantara"
-# version = "0.4.1"
+# version = "0.4.2"
 # ///
 """BambuQueue for OrcaSlicer -> Bambuddy.
 
@@ -388,11 +388,6 @@ def auto_stage(force=False):
 PAGE = r"""<!doctype html><html><head><meta charset=utf8>
 <style>
  body{font-family:var(--orca-font);color:var(--orca-fg);margin:0;padding:8px;font-size:13px;min-width:320px;box-sizing:border-box}
- #sliver{display:none;flex-direction:column;align-items:center;gap:8px;padding:6px 0}
- #sstat{writing-mode:vertical-rl;letter-spacing:.08em;font-size:11px;max-height:180px;overflow:hidden;white-space:nowrap}
- body.min{margin:4px;min-width:0}
- body.min #main{display:none}
- body.min #sliver{display:flex}
  h2{font-size:14px;margin:0 0 6px}
  .row{display:flex;gap:4px;align-items:center;margin:4px 0}
  label{color:var(--orca-muted);min-width:44px}
@@ -418,7 +413,7 @@ PAGE = r"""<!doctype html><html><head><meta charset=utf8>
  .inj{font-size:11px;color:#5bbf6a}
 </style></head><body>
 <div id=main>
-<div class=row style="margin:0 0 4px;justify-content:flex-start"><button id=hide class=ghost title="collapse to strip" style="min-width:28px;padding:0 8px">»</button><span id=ver class=muted style="font-size:11px;margin-left:6px"></span></div>
+<div class=row style="margin:0 0 4px"><span id=ver class=muted style="font-size:11px"></span></div>
 <div class=row><label>Server</label><input id=url style="flex:1">
   <label style="min-width:0">Printer</label><select id=printer style="max-width:120px"></select></div>
 <div class=row><input id=name style="flex:1" placeholder="job name — set when you slice"></div>
@@ -429,7 +424,6 @@ PAGE = r"""<!doctype html><html><head><meta charset=utf8>
   <span id=sum class=muted style="font-size:13px"></span></div>
 <div id=status></div>
 </div>
-<div id=sliver><button id=expand class=ghost title="expand">«</button><span id=sstat class=muted></span></div>
 <script>
 const $=id=>document.getElementById(id);
 let S={url:"",printer_id:null,printers:[],items:[],staged:false,ok:false,name:""};
@@ -490,8 +484,6 @@ function render(){
     q.appendChild(d);
   });
   $("sum").textContent=items.length?items.length+" items ("+pend+" pending)":"queue empty";
-  const pr=items.find(x=>x.status==="printing");
-  $("sstat").textContent=pr?"\u25b6 "+(pr.library_file_name||"").slice(0,24):(items.length||0)+" queued";
   if(!items.length)q.innerHTML='<div class=muted>Nothing queued.</div>';
 }
 $("add").onclick=()=>orca.postMessage({type:"add",name:$("name").value.trim()});
@@ -531,8 +523,6 @@ $("add").onclick=()=>orca.postMessage({type:"add",name:$("name").value.trim()});
   }
 })();
 $("refresh").onclick=()=>orca.postMessage({type:"refresh"});
-$("hide").onclick=()=>{document.body.classList.add("min");orca.postMessage({type:"collapse"})};
-$("expand").onclick=()=>{document.body.classList.remove("min");orca.postMessage({type:"expand"})};
 $("url").onchange=e=>orca.postMessage({type:"url",url:e.target.value.trim()});
 $("printer").onchange=e=>orca.postMessage({type:"printer",printer_id:parseInt(e.target.value,10)});
 orca.onMessage(m=>{
@@ -558,11 +548,6 @@ class CapturePlate(orca.slicing.SlicingPipelineCapabilityBase):
     def execute(self, ctx):
         if ctx.step != orca.slicing.Step.psGCodePostProcess:
             return orca.ExecutionResult.success()
-        try:
-            if PANEL is not None:
-                PANEL._ensure_panel()   # auto-restore dock after X-close (option D)
-        except Exception:
-            pass
         try:
             os.makedirs(STORE_ROOT, exist_ok=True)
             shutil.copyfile(ctx.gcode_path, STAGING)
@@ -605,30 +590,6 @@ class Panel(orca.script.ScriptPluginCapabilityBase):
         self.cfg = load_config()
         self._open_panel()
         self._push()
-        threading.Thread(target=self._watchdog, daemon=True).start()
-    def _watchdog(self):
-        """Runs without the panel: stages new slices every 4s and reopens the
-        dock when a fresh slice lands while it is closed."""
-        def seen():
-            try:
-                return os.path.getmtime(STAGING)
-            except OSError:
-                return 0.0
-        prev = seen()
-        while True:
-            time.sleep(4)
-            try:
-                auto_stage()
-            except Exception:
-                pass
-            cur = seen()
-            if cur != prev:
-                prev = cur
-                if not self._is_open():
-                    try:
-                        self._ensure_panel()
-                    except Exception:
-                        pass
     def on_close(self):
         self.panel = None
     def _open_panel(self):
@@ -646,22 +607,11 @@ class Panel(orca.script.ScriptPluginCapabilityBase):
             return bool(v)
         except Exception:
             return False
-    def _ensure_panel(self):
-        """Re-create the dock if it was closed. Returns True if reopened."""
-        if self._is_open():
-            return False
-        try:
-            self._open_panel()
-            self._push()
-            return True
-        except Exception:
-            self.panel = None
-            return False
 
     # ---- state push
     def _collect(self):
         auto_stage()
-        st = {"type": "state", "v": "0.4.1", "url": self.cfg["url"], "printer_id": self.cfg["printer_id"],
+        st = {"type": "state", "v": "0.4.2", "url": self.cfg["url"], "printer_id": self.cfg["printer_id"],
               "printers": [], "items": [], "staged": os.path.exists(STAGING), "ok": False,
               "name": ""}
         try:
@@ -706,18 +656,6 @@ class Panel(orca.script.ScriptPluginCapabilityBase):
         if errs:
             st["_err"] = "; ".join(errs)
         return st
-    def _resize_dock(self, w):
-        if not self._is_open():
-            return
-        try:
-            self.panel.resize(w, 600)
-        except TypeError:
-            try:
-                self.panel.resize(w)
-            except Exception:
-                pass
-        except Exception:
-            pass
     def _post(self, obj):
         if not self._is_open():
             return
@@ -756,10 +694,6 @@ class Panel(orca.script.ScriptPluginCapabilityBase):
             if t == "printer":
                 self.cfg["printer_id"] = msg["printer_id"]
                 save_config(self.cfg); self._push(); return
-            if t == "collapse":
-                self._resize_dock(46); return
-            if t == "expand":
-                self._resize_dock(360); return
             if t == "refresh":
                 self._push(); return
         except Exception as e:
