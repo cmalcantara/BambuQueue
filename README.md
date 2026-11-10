@@ -88,9 +88,9 @@ manual click after every stop.
 | Add | stages the newest slice, uploads, queues |
 | Queue list | drag the grip to reorder pending jobs; copy and delete buttons; the printing row shows a badge, percent, live ETA, copy, and STOP |
 
-The `»` button collapses the panel to a narrow strip; press `«` to expand it
-and drag the dock edge wide again. Orca's own X closes the panel for good, but
-the next slice brings it back automatically.
+Closing the panel with its X button destroys it; reload the plugin (or
+restart OrcaSlicer) to reopen it. There is no reopen hook in the Orca plugin
+API.
 
 Settings persist in `<Orca data dir>/bambuddy_queue/config.json`.
 
