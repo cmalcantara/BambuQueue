@@ -95,13 +95,14 @@ API.
 Settings persist in `<Orca data dir>/bambuddy_queue/config.json`.
 
 ## release.3mf safety
-The included release job fits one machine: an A1 Mini with my PlateCycler C1.
-It contains the stock A1 Mini end block, including `M177` and `M1006` sound
-lines, plus my rig's swap motion. Other printers or rigs must rebuild it:
-take the header and end block from a real slice of your machine, append your
-own swap motion, and package it like a plate. If the motions can hit your
-hardware, run it over a cleared bed first. Delete release.3mf to disable
-eject-on-stop; STOP then behaves like Bambuddy's own stop.
+The included `release.3mf` fits one machine only: a Bambu A1 Mini with a
+PlateCycler C1. It contains the stock A1 Mini end block, including `M177`
+and `M1006` sound lines, plus the PlateCycler C1 swap motion. Other
+printers or rigs must rebuild it: take the header and end block from a
+real slice of your machine, append your own swap motion, and package it
+like a plate. If the motions can hit your hardware, run it over a cleared
+bed first. Delete `release.3mf` to disable eject-on-stop; STOP then
+behaves like Bambuddy's own stop.
 
 ## Troubleshooting
 - Add does nothing: restart OrcaSlicer after plugin updates, and check that
